@@ -1,0 +1,146 @@
+### Variables
+@baseUrl = http://localhost:3001/api
+@token = TU_TOKEN_AQUI
+
+### ENTRADAS
+
+### 1. Listar entradas
+GET {{baseUrl}}/entradas
+Authorization: Bearer {{token}}
+
+### 2. Listar con filtros
+GET {{baseUrl}}/entradas?pagina=1&limite=10&fecha_inicio=2025-01-01&fecha_fin=2025-12-31
+Authorization: Bearer {{token}}
+
+### 3. Buscar por proveedor
+GET {{baseUrl}}/entradas?proveedor_id=1
+Authorization: Bearer {{token}}
+
+### 4. Obtener estadísticas
+GET {{baseUrl}}/entradas/estadisticas
+Authorization: Bearer {{token}}
+
+### 5. Entradas recientes
+GET {{baseUrl}}/entradas/recientes?limite=5
+Authorization: Bearer {{token}}
+
+### 6. Generar número de entrada
+GET {{baseUrl}}/entradas/generar-numero
+Authorization: Bearer {{token}}
+
+### 7. Validar entrada antes de crear
+POST {{baseUrl}}/entradas/validar
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "proveedor_id": 1,
+  "detalles": [
+    {
+      "producto_id": 1,
+      "cantidad": 10,
+      "precio_unitario": 850.00,
+      "lote": "LOT-2025-001",
+      "fecha_vencimiento": "2027-12-31"
+    },
+    {
+      "producto_id": 2,
+      "cantidad": 20,
+      "precio_unitario": 180.00,
+      "lote": "LOT-2025-002",
+      "fecha_vencimiento": "2026-06-30"
+    }
+  ]
+}
+
+### 8. Crear entrada completa
+POST {{baseUrl}}/entradas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "proveedor_id": 1,
+  "tipo_documento": "factura",
+  "numero_documento": "FAC-2025-001234",
+  "fecha": "2025-06-02",
+  "observaciones": "Primera entrada de prueba",
+  "detalles": [
+    {
+      "producto_id": 1,
+      "cantidad": 10,
+      "precio_unitario": 850.00,
+      "lote": "LOT-2025-001",
+      "fecha_vencimiento": "2027-12-31"
+    },
+    {
+      "producto_id": 2,
+      "cantidad": 20,
+      "precio_unitario": 180.00,
+      "lote": "LOT-2025-002",
+      "fecha_vencimiento": "2026-06-30"
+    },
+    {
+      "producto_id": 3,
+      "cantidad": 50,
+      "precio_unitario": 45.00,
+      "lote": "LOT-2025-003",
+      "fecha_vencimiento": "2026-12-31"
+    }
+  ]
+}
+
+### 9. Crear entrada con múltiples productos
+POST {{baseUrl}}/entradas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "proveedor_id": 2,
+  "tipo_documento": "orden_compra",
+  "numero_documento": "OC-2025-000456",
+  "fecha": "2025-06-01",
+  "observaciones": "Compra mensual de productos Abbott",
+  "detalles": [
+    {
+      "producto_id": 4,
+      "cantidad": 25,
+      "precio_unitario": 120.00,
+      "lote": "ABB-2025-001",
+      "fecha_vencimiento": "2027-06-30"
+    },
+    {
+      "producto_id": 5,
+      "cantidad": 15,
+      "precio_unitario": 95.00,
+      "lote": "ABB-2025-002",
+      "fecha_vencimiento": "2027-03-31"
+    }
+  ]
+}
+
+### 10. Obtener entrada por ID
+GET {{baseUrl}}/entradas/1
+Authorization: Bearer {{token}}
+
+### 11. Anular entrada
+POST {{baseUrl}}/entradas/1/anular
+Authorization: Bearer {{token}}
+
+### 12. Crear entrada sin lote (error esperado)
+POST {{baseUrl}}/entradas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "proveedor_id": 1,
+  "tipo_documento": "factura",
+  "numero_documento": "FAC-ERROR-001",
+  "fecha": "2025-06-02",
+  "detalles": [
+    {
+      "producto_id": 1,
+      "cantidad": 5,
+      "precio_unitario": 850.00
+    }
+  ]
+}

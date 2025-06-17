@@ -1,0 +1,77 @@
+### Variables
+@baseUrl = http://localhost:3001/api
+@token = TU_TOKEN_AQUI
+
+### INVENTARIO
+
+### 1. Obtener inventario completo
+GET {{baseUrl}}/inventario
+Authorization: Bearer {{token}}
+
+### 2. Inventario con filtros
+GET {{baseUrl}}/inventario?pagina=1&limite=10&solo_disponible=true&orden=p.codigo&direccion=ASC
+Authorization: Bearer {{token}}
+
+### 3. Buscar en inventario
+GET {{baseUrl}}/inventario?buscar=stent
+Authorization: Bearer {{token}}
+
+### 4. Inventario por categoría
+GET {{baseUrl}}/inventario?categoria_id=1
+Authorization: Bearer {{token}}
+
+### 5. Inventario por proveedor
+GET {{baseUrl}}/inventario?proveedor_id=1
+Authorization: Bearer {{token}}
+
+### 6. Resumen del inventario
+GET {{baseUrl}}/inventario/resumen
+Authorization: Bearer {{token}}
+
+### 7. Inventario por categorías
+GET {{baseUrl}}/inventario/por-categorias
+Authorization: Bearer {{token}}
+
+### 8. Inventario por proveedores
+GET {{baseUrl}}/inventario/por-proveedores
+Authorization: Bearer {{token}}
+
+### 9. Productos con stock crítico
+GET {{baseUrl}}/inventario/stock-critico
+Authorization: Bearer {{token}}
+
+### 10. Productos próximos a vencer (30 días)
+GET {{baseUrl}}/inventario/proximos-vencer?dias=30
+Authorization: Bearer {{token}}
+
+### 11. Productos próximos a vencer (60 días)
+GET {{baseUrl}}/inventario/proximos-vencer?dias=60
+Authorization: Bearer {{token}}
+
+### 12. Productos vencidos
+GET {{baseUrl}}/inventario/vencidos
+Authorization: Bearer {{token}}
+
+### 13. Valorización del inventario
+GET {{baseUrl}}/inventario/valorizacion
+Authorization: Bearer {{token}}
+
+### 14. Análisis de rotación (30 días)
+GET {{baseUrl}}/inventario/rotacion?dias=30
+Authorization: Bearer {{token}}
+
+### 15. Análisis de rotación (90 días)
+GET {{baseUrl}}/inventario/rotacion?dias=90
+Authorization: Bearer {{token}}
+
+### 16. Kardex de un producto
+GET {{baseUrl}}/inventario/kardex/1
+Authorization: Bearer {{token}}
+
+### 17. Kardex con rango de fechas
+GET {{baseUrl}}/inventario/kardex/1?fecha_inicio=2025-01-01&fecha_fin=2025-12-31&limite=100
+Authorization: Bearer {{token}}
+
+### 18. Exportar inventario completo
+GET {{baseUrl}}/inventario/exportar?solo_disponible=true
+Authorization: Bearer {{token}}

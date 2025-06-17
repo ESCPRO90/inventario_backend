@@ -1,0 +1,71 @@
+### Variables
+@baseUrl = http://localhost:3001/api
+@token = TU_TOKEN_AQUI
+
+### PROVEEDORES
+
+### 1. Listar proveedores
+GET {{baseUrl}}/proveedores
+Authorization: Bearer {{token}}
+
+### 2. Listar con paginación y búsqueda
+GET {{baseUrl}}/proveedores?pagina=1&limite=5&buscar=boston
+Authorization: Bearer {{token}}
+
+### 3. Buscar proveedores (autocomplete)
+GET {{baseUrl}}/proveedores/buscar?q=med
+Authorization: Bearer {{token}}
+
+### 4. Crear proveedor
+POST {{baseUrl}}/proveedores
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "codigo": "JOHNSON-JJ",
+  "nombre": "Johnson & Johnson Medical Devices",
+  "nit": "04-9876543-2",
+  "direccion": "New Brunswick, New Jersey, USA",
+  "telefono": "+1-732-524-0400",
+  "email": "ventas.latam@jnj.com",
+  "contacto": "Laura Mendoza"
+}
+
+### 5. Obtener proveedor por ID
+GET {{baseUrl}}/proveedores/1
+Authorization: Bearer {{token}}
+
+### 6. Obtener proveedor con productos
+GET {{baseUrl}}/proveedores/1?incluir_productos=true
+Authorization: Bearer {{token}}
+
+### 7. Obtener proveedor con estadísticas
+GET {{baseUrl}}/proveedores/1?incluir_estadisticas=true
+Authorization: Bearer {{token}}
+
+### 8. Obtener proveedor completo
+GET {{baseUrl}}/proveedores/1?incluir_productos=true&incluir_estadisticas=true
+Authorization: Bearer {{token}}
+
+### 9. Obtener productos del proveedor
+GET {{baseUrl}}/proveedores/1/productos
+Authorization: Bearer {{token}}
+
+### 10. Obtener estadísticas del proveedor
+GET {{baseUrl}}/proveedores/1/estadisticas
+Authorization: Bearer {{token}}
+
+### 11. Actualizar proveedor
+PUT {{baseUrl}}/proveedores/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "telefono": "+1-508-683-5000",
+  "email": "nuevoemail@bsci.com",
+  "contacto": "María González Torres"
+}
+
+### 12. Desactivar proveedor
+DELETE {{baseUrl}}/proveedores/10
+Authorization: Bearer {{token}}

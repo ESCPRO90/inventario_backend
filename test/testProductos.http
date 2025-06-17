@@ -1,0 +1,87 @@
+# Script para probar el módulo de productos
+$baseUrl = "http://localhost:3001/api"
+
+Write-Host "🔑 Obteniendo token de autenticación..." -ForegroundColor Yellow
+
+# Login
+$loginBody = @{
+    username = "admin"
+    password = "admin123"
+} | ConvertTo-Json
+
+try {
+    $loginResponse = Invoke-RestMethod -Uri "$baseUrl/auth/login" `
+        -Method Post `
+        -ContentType "application/json" `
+        -Body $loginBody
+    
+    if ($loginResponse.success) {
+        $token = $loginResponse.data.token
+        Write-Host "✅ Token obtenido exitosamente" -ForegroundColor Green
+        
+        # Configurar headers con el token
+        $headers = @{
+            "Authorization" = "Bearer $token"
+        }
+        
+        # Probar categorías
+        Write-Host "`n📁 Listando categorías..." -ForegroundColor Yellow
+        try {
+            $categorias = Invoke-RestMethod -Uri "$baseUrl/productos/categorias/listar" `
+                -Method Get `
+                -Headers $headers
+            
+            Write-Host "✅ Categorías encontradas: $($categorias.data.total)" -ForegroundColor Green
+            foreach ($cat in $categorias.data.categorias) {
+                Write-Host "   - $($cat.nombre) (ID: $($cat.id), Productos: $($cat.total_productos))" -ForegroundColor White
+            }
+        } catch {
+            Write-Host "❌ Error al listar categorías: $_" -ForegroundColor Red
+        }
+        
+        # Probar productos
+        Write-Host "`n📦 Listando productos..." -ForegroundColor Yellow
+        try {
+            $productos = Invoke-RestMethod -Uri "$baseUrl/productos" `
+                -Method Get `
+                -Headers $headers
+            
+            Write-Host "✅ Productos encontrados: $($productos.data.paginacion.total)" -ForegroundColor Green
+            foreach ($prod in $productos.data.productos) {
+                Write-Host "   - $($prod.codigo): $($prod.descripcion.Substring(0, [Math]::Min(50, $prod.descripcion.Length)))..." -ForegroundColor White
+                Write-Host "     Stock: $($prod.stock_actual) | Categoría: $($prod.categoria_nombre)" -ForegroundColor Gray
+            }
+        } catch {
+            Write-Host "❌ Error al listar productos: $_" -ForegroundColor Red
+        }
+        
+        # Productos con stock bajo
+        Write-Host "`n⚠️  Verificando productos con stock bajo..." -ForegroundColor Yellow
+        try {
+            $stockBajo = Invoke-RestMethod -Uri "$baseUrl/productos/stock-bajo" `
+                -Method Get `
+                -Headers $headers
+            
+            if ($stockBajo.data.total -gt 0) {
+                Write-Host "⚠️  Productos con stock bajo: $($stockBajo.data.total)" -ForegroundColor Yellow
+                foreach ($prod in $stockBajo.data.productos) {
+                    Write-Host "   - $($prod.codigo): Stock actual: $($prod.stock_actual) / Mínimo: $($prod.stock_minimo)" -ForegroundColor Yellow
+                }
+            } else {
+                Write-Host "✅ No hay productos con stock bajo" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "❌ Error al verificar stock bajo: $_" -ForegroundColor Red
+        }
+        
+        Write-Host "`n✅ Pruebas completadas!" -ForegroundColor Green
+        Write-Host "`nToken para usar en otras pruebas:" -ForegroundColor Cyan
+        Write-Host $token -ForegroundColor Gray
+        
+    } else {
+        Write-Host "❌ Error en login: $($loginResponse.message)" -ForegroundColor Red
+    }
+} catch {
+    Write-Host "❌ Error de conexión: $_" -ForegroundColor Red
+    Write-Host "Asegúrate de que el servidor esté corriendo (npm run dev)" -ForegroundColor Yellow
+}

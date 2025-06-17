@@ -1,0 +1,83 @@
+### Variables
+@baseUrl = http://localhost:3001/api
+@token = 
+
+### 1. Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+### 2. Registro (para el primer usuario)
+POST {{baseUrl}}/auth/registro
+Content-Type: application/json
+
+{
+  "username": "bodeguero1",
+  "password": "bodega123",
+  "nombre_completo": "Juan Pérez",
+  "email": "juan@inventario.com",
+  "rol": "bodeguero"
+}
+
+### 3. Ver perfil (requiere token)
+GET {{baseUrl}}/auth/perfil
+Authorization: Bearer {{token}}
+
+### 4. Actualizar perfil
+PUT {{baseUrl}}/auth/perfil
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre_completo": "Juan Pérez García",
+  "email": "juan.perez@inventario.com"
+}
+
+### 5. Cambiar contraseña
+PUT {{baseUrl}}/auth/cambiar-password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "password_actual": "admin123",
+  "password_nuevo": "nuevaPassword123"
+}
+
+### 6. Listar usuarios (solo admin)
+GET {{baseUrl}}/auth/usuarios
+Authorization: Bearer {{token}}
+
+### 7. Crear nuevo usuario (solo admin)
+POST {{baseUrl}}/auth/usuarios
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "username": "facturador1",
+  "password": "factura123",
+  "nombre_completo": "María González",
+  "email": "maria@inventario.com",
+  "rol": "facturador"
+}
+
+### 8. Actualizar usuario (solo admin)
+PUT {{baseUrl}}/auth/usuarios/2
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "rol": "vendedor",
+  "activo": true
+}
+
+### 9. Desactivar usuario (solo admin)
+DELETE {{baseUrl}}/auth/usuarios/3
+Authorization: Bearer {{token}}
+
+### 10. Logout
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{token}}
