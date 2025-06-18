@@ -1,17 +1,17 @@
 const { validationResult } = require('express-validator');
 const Usuario = require('../models/Usuario');
+const { AuthenticationError, ValidationError, NotFoundError, BusinessLogicError } = require('../utils/customErrors');
 
 // Registrar nuevo usuario
 const registrar = async (req, res, next) => {
   try {
-    // Verificar errores de validación
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Errores de validación',
-        errors: errors.array()
-      });
+      // Pass express-validator errors to the central error handler
+      // Option 1: Throw a custom ValidationError
+      // throw new ValidationError('Errores de validación de entrada', errors.array());
+      // Option 2: Let errorHandler handle the specific structure of express-validator errors
+      return next(errors); // errorHandler can check for err.array
     }
     
     const { username, password, nombre_completo, email, rol } = req.body;
@@ -47,33 +47,23 @@ const login = async (req, res, next) => {
     // Verificar errores de validación
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Errores de validación',
-        errors: errors.array()
-      });
+      return next(errors); // Let errorHandler handle express-validator errors
     }
     
     const { username, password } = req.body;
     
     // Buscar usuario
-    const usuario = await Usuario.buscarPorUsername(username);
+    const usuario = await Usuario.buscarPorUsername(username); // Model won't throw NotFoundError here by design for login
     
     if (!usuario) {
-      return res.status(401).json({
-        success: false,
-        message: 'Credenciales inválidas'
-      });
+      return next(new AuthenticationError('Credenciales inválidas'));
     }
     
     // Verificar password
     const passwordValido = await Usuario.verificarPassword(password, usuario.password);
     
     if (!passwordValido) {
-      return res.status(401).json({
-        success: false,
-        message: 'Credenciales inválidas'
-      });
+      return next(new AuthenticationError('Credenciales inválidas'));
     }
     
     // Actualizar último acceso
@@ -117,30 +107,19 @@ const actualizarPerfil = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Errores de validación',
-        errors: errors.array()
-      });
+      return next(errors);
     }
     
     const { nombre_completo, email } = req.body;
-    const userId = req.usuario.id;
+    const userId = req.usuario.id; // req.usuario is set by verificarToken
     
-    // Actualizar usuario
-    const actualizado = await Usuario.actualizar(userId, {
+    // Usuario.actualizar will throw NotFoundError or other errors if update fails
+    await Usuario.actualizar(userId, {
       nombre_completo,
       email
     });
     
-    if (!actualizado) {
-      return res.status(400).json({
-        success: false,
-        message: 'No se pudo actualizar el perfil'
-      });
-    }
-    
-    // Obtener usuario actualizado
+    // Obtener usuario actualizado (buscarPorId throws NotFoundError if user somehow deleted)
     const usuarioActualizado = await Usuario.buscarPorId(userId);
     
     res.json({
@@ -160,16 +139,13 @@ const cambiarPassword = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Errores de validación',
-        errors: errors.array()
-      });
+      return next(errors);
     }
     
     const { password_actual, password_nuevo } = req.body;
     const userId = req.usuario.id;
     
+    // Usuario.cambiarPassword will throw NotFoundError or BusinessLogicError
     await Usuario.cambiarPassword(userId, password_actual, password_nuevo);
     
     res.json({
@@ -177,12 +153,7 @@ const cambiarPassword = async (req, res, next) => {
       message: 'Contraseña actualizada exitosamente'
     });
   } catch (error) {
-    if (error.message === 'La contraseña actual es incorrecta') {
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
+    // Let errorHandler handle specific errors thrown by the model
     next(error);
   }
 };
@@ -209,13 +180,10 @@ const crearUsuario = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Errores de validación',
-        errors: errors.array()
-      });
+      return next(errors);
     }
     
+    // Usuario.crear will throw ValidationError or ConflictError
     const nuevoUsuario = await Usuario.crear(req.body);
     
     res.status(201).json({
@@ -235,33 +203,21 @@ const actualizarUsuario = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Errores de validación',
-        errors: errors.array()
-      });
+      return next(errors);
     }
     
-    const { id } = req.params;
+    const { id } = req.params; // param id is validated by router
     
     // No permitir que un usuario se modifique a sí mismo desde aquí
-    if (parseInt(id) === req.usuario.id) {
-      return res.status(400).json({
-        success: false,
-        message: 'No puedes modificarte a ti mismo desde esta ruta'
-      });
+    if (parseInt(id, 10) === req.usuario.id) {
+      // Throwing a BusinessLogicError for the errorHandler to handle
+      return next(new BusinessLogicError('No puedes modificarte a ti mismo desde esta ruta', 400));
     }
     
-    const actualizado = await Usuario.actualizar(id, req.body);
+    // Usuario.actualizar will throw NotFoundError or other errors
+    await Usuario.actualizar(id, req.body);
     
-    if (!actualizado) {
-      return res.status(404).json({
-        success: false,
-        message: 'Usuario no encontrado'
-      });
-    }
-    
-    const usuarioActualizado = await Usuario.buscarPorId(id);
+    const usuarioActualizado = await Usuario.buscarPorId(id); // buscarPorId throws NotFoundError
     
     res.json({
       success: true,
@@ -278,23 +234,18 @@ const actualizarUsuario = async (req, res, next) => {
 // Desactivar usuario (solo admin)
 const desactivarUsuario = async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params; // param id is validated by router
     
     // No permitir que un admin se desactive a sí mismo
-    if (parseInt(id) === req.usuario.id) {
-      return res.status(400).json({
-        success: false,
-        message: 'No puedes desactivarte a ti mismo'
-      });
+    if (parseInt(id, 10) === req.usuario.id) {
+      return next(new BusinessLogicError('No puedes desactivarte a ti mismo', 400));
     }
     
-    const desactivado = await Usuario.desactivar(id);
+    const desactivado = await Usuario.desactivar(id); // Model should throw NotFoundError if not found
     
     if (!desactivado) {
-      return res.status(404).json({
-        success: false,
-        message: 'Usuario no encontrado'
-      });
+      // This case should ideally be handled by Usuario.desactivar throwing NotFoundError
+      return next(new NotFoundError(`Usuario con ID ${id} no encontrado para desactivar.`));
     }
     
     res.json({

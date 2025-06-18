@@ -12,34 +12,42 @@ router.use(verificarToken);
 
 // Listar productos con paginación y filtros
 router.get('/', [
-  query('pagina').optional().isInt({ min: 1 }).withMessage('Página debe ser un número positivo'),
-  query('limite').optional().isInt({ min: 1, max: 100 }).withMessage('Límite debe estar entre 1 y 100'),
-  query('categoria_id').optional().isInt().withMessage('ID de categoría inválido'),
-  query('orden').optional().isIn(['codigo', 'descripcion', 'stock_actual', 'created_at']).withMessage('Orden inválido'),
-  query('direccion').optional().isIn(['ASC', 'DESC', 'asc', 'desc']).withMessage('Dirección inválida')
+  query('pagina').optional().isInt({ min: 1 }).withMessage('Página debe ser un número positivo').toInt(),
+  query('limite').optional().isInt({ min: 1, max: 100 }).withMessage('Límite debe estar entre 1 y 100').toInt(),
+  query('buscar').optional().isString().trim().escape().withMessage('Búsqueda inválida'),
+  query('categoria_id').optional().isInt({ min: 1 }).withMessage('ID de categoría inválido').toInt(),
+  query('disponibles').optional().isBoolean().withMessage('Parámetro "disponibles" debe ser booleano').toBoolean(),
+  query('orden').optional().isIn(['codigo', 'descripcion', 'stock_actual', 'created_at', 'precio_venta']).withMessage('Orden inválido'),
+  query('direccion').optional().isIn(['ASC', 'DESC', 'asc', 'desc']).toUpperCase().withMessage('Dirección inválida')
 ], productosController.listarProductos);
 
 // Buscar productos (autocomplete)
 router.get('/buscar', [
-  query('q').notEmpty().withMessage('Término de búsqueda requerido'),
-  query('limite').optional().isInt({ min: 1, max: 50 }).withMessage('Límite debe estar entre 1 y 50')
+  query('q').notEmpty().withMessage('Término de búsqueda requerido').trim().escape(),
+  query('limite').optional().isInt({ min: 1, max: 50 }).withMessage('Límite debe estar entre 1 y 50').toInt()
 ], productosController.buscarProductos);
 
 // Productos con stock bajo
-router.get('/stock-bajo', productosController.productosStockBajo);
+router.get('/stock-bajo', productosController.productosStockBajo); // No query params typically
 
 // Productos próximos a vencer
 router.get('/proximos-vencer', [
-  query('dias').optional().isInt({ min: 1, max: 365 }).withMessage('Días debe estar entre 1 y 365')
+  query('dias').optional().isInt({ min: 1, max: 365 }).withMessage('Días debe estar entre 1 y 365').toInt()
 ], productosController.productosProximosVencer);
 
 // Listar categorías - DEBE IR ANTES DE /:id
-router.get('/categorias/listar', productosController.listarCategorias);
+router.get('/categorias/listar', [
+  query('pagina').optional().isInt({ min: 1 }).withMessage('Página debe ser un número positivo').toInt(),
+  query('limite').optional().isInt({ min: 1, max: 100 }).withMessage('Límite debe estar entre 1 y 100').toInt(),
+  query('buscar').optional().isString().trim().escape().withMessage('Búsqueda inválida'),
+  query('orden').optional().isAlpha('es-ES', {ignore: '._'}).escape().withMessage('Orden inválido'),
+  query('direccion').optional().isIn(['ASC', 'DESC', 'asc', 'desc']).toUpperCase().withMessage('Dirección inválida')
+], productosController.listarCategorias);
 
 // Obtener producto por ID
 router.get('/:id', [
-  param('id').isInt().withMessage('ID inválido'),
-  query('incluir_stock').optional().isBoolean().withMessage('incluir_stock debe ser booleano')
+  param('id').isInt({ min: 1 }).withMessage('ID de producto inválido').toInt(),
+  query('incluir_stock').optional().isBoolean().withMessage('incluir_stock debe ser booleano').toBoolean()
 ], productosController.obtenerProducto);
 
 // Crear producto (solo admin o bodeguero)

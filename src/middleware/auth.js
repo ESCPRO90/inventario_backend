@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const Usuario = require('../models/Usuario');
+const { AuthenticationError, AuthorizationError, NotFoundError } = require('../utils/customErrors');
 
 // Verificar token JWT
 const verificarToken = async (req, res, next) => {
@@ -8,23 +9,18 @@ const verificarToken = async (req, res, next) => {
     const token = req.header('Authorization')?.replace('Bearer ', '');
     
     if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'No se proporcionó token de autenticación'
-      });
+      return next(new AuthenticationError('No se proporcionó token de autenticación'));
     }
     
     // Verificar token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET); // Can throw JsonWebTokenError or TokenExpiredError
     
     // Buscar usuario
     const usuario = await Usuario.buscarPorId(decoded.id);
     
     if (!usuario) {
-      return res.status(401).json({
-        success: false,
-        message: 'Token inválido - Usuario no encontrado'
-      });
+      // Even if token is valid, user might have been deleted/deactivated
+      return next(new AuthenticationError('Token inválido - Usuario no encontrado o inactivo'));
     }
     
     // Agregar usuario a la request
@@ -33,24 +29,15 @@ const verificarToken = async (req, res, next) => {
     
     next();
   } catch (error) {
+    // Catch JWT specific errors and other unexpected errors
     if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token inválido'
-      });
+      return next(new AuthenticationError('Token inválido'));
     }
-    
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token expirado'
-      });
+      return next(new AuthenticationError('Token expirado'));
     }
-    
-    return res.status(500).json({
-      success: false,
-      message: 'Error al verificar autenticación'
-    });
+    // For other errors during the process (e.g., DB connection issue in buscarPorId if not caught by model)
+    return next(new AuthenticationError('Error al verificar autenticación: ' + error.message));
   }
 };
 
@@ -58,17 +45,12 @@ const verificarToken = async (req, res, next) => {
 const verificarRol = (...rolesPermitidos) => {
   return (req, res, next) => {
     if (!req.usuario) {
-      return res.status(401).json({
-        success: false,
-        message: 'No autenticado'
-      });
+      // This should ideally not happen if verificarToken is always run before
+      return next(new AuthenticationError('No autenticado. Se requiere token.'));
     }
     
     if (!rolesPermitidos.includes(req.usuario.rol)) {
-      return res.status(403).json({
-        success: false,
-        message: 'No tienes permisos para realizar esta acción'
-      });
+      return next(new AuthorizationError('No tienes permisos para realizar esta acción'));
     }
     
     next();

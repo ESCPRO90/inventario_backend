@@ -1,141 +1,75 @@
 const { validationResult } = require('express-validator');
-const { query: dbQuery } = require('../config/database');
+const Inventario = require('../models/Inventario');
+const { transaction, query: dbQuery } = require('../config/database'); // query for direct use if still needed
 
 // Obtener inventario general
 const obtenerInventario = async (req, res, next) => {
   try {
-    const {
-      pagina = 1,
-      limite = 20,
-      buscar = '',
-      producto_id,
-      proveedor_id,
-      estado = 'disponible',
-      proximos_vencer,
-      orden = 'producto_codigo',
-      direccion = 'ASC'
-    } = req.query;
-
-    const offset = (pagina - 1) * limite;
-    const parametros = [];
-    let whereClause = 'WHERE 1=1';
-
-    // Filtros
-    if (buscar) {
-      whereClause += ' AND (p.codigo LIKE ? OR p.descripcion LIKE ? OR i.lote LIKE ?)';
-      const buscarPattern = `%${buscar}%`;
-      parametros.push(buscarPattern, buscarPattern, buscarPattern);
-    }
-
-    if (producto_id) {
-      whereClause += ' AND i.producto_id = ?';
-      parametros.push(producto_id);
-    }
-
-    if (proveedor_id) {
-      whereClause += ' AND i.proveedor_id = ?';
-      parametros.push(proveedor_id);
-    }
-
-    if (estado) {
-      whereClause += ' AND i.estado = ?';
-      parametros.push(estado);
-    }
-
-    if (proximos_vencer) {
-      whereClause += ' AND i.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL ? DAY)';
-      parametros.push(proximos_vencer);
-    }
-
-    // Query para contar total
-    const sqlCount = `
-      SELECT COUNT(*) as total
-      FROM inventario i
-      JOIN productos p ON i.producto_id = p.id
-      ${whereClause}
-    `;
-    
-    const [{ total }] = await dbQuery(sqlCount, parametros);
-
-    // Query principal
-    parametros.push(limite, offset);
-    const sql = `
-      SELECT 
-        i.*,
-        p.codigo as producto_codigo,
-        p.referencia as producto_referencia,
-        p.descripcion as producto_descripcion,
-        p.unidad_medida,
-        pr.codigo as proveedor_codigo,
-        pr.nombre as proveedor_nombre,
-        DATEDIFF(i.fecha_vencimiento, CURDATE()) as dias_para_vencer,
-        (i.cantidad_actual * p.precio_venta) as valor_inventario
-      FROM inventario i
-      JOIN productos p ON i.producto_id = p.id
-      JOIN proveedores pr ON i.proveedor_id = pr.id
-      ${whereClause}
-      ORDER BY ${orden} ${direccion}
-      LIMIT ? OFFSET ?
-    `;
-
-    const inventario = await dbQuery(sql, parametros);
-
+    // express-validator should handle parsing and basic validation at route level
+    // The model method Inventario.obtenerInventarioGeneral will handle defaults and SQL construction
+    const resultado = await Inventario.obtenerInventarioGeneral(req.query);
     res.json({
       success: true,
-      data: {
-        inventario,
-        paginacion: {
-          total,
-          pagina_actual: pagina,
-          total_paginas: Math.ceil(total / limite),
-          limite
-        }
-      }
+      data: resultado
     });
   } catch (error) {
     next(error);
   }
 };
 
+// Obtener detalle de un lote específico
+const obtenerLotePorId = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const lote = await Inventario.obtenerDetalleLote(id);
+    if (!lote) {
+      return res.status(404).json({ success: false, message: 'Lote no encontrado' });
+    }
+    res.json({ success: true, data: lote });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
 // Obtener kardex de un producto
 const obtenerKardex = async (req, res, next) => {
   try {
-    const { producto_id } = req.params;
+    const { producto_id } = req.params; // This should be validated as int at route level
     const {
       fecha_inicio,
       fecha_fin,
       tipo_movimiento,
-      limite = 50
-    } = req.query;
+      limite = 50 // Default limit
+    } = req.query; // Query params should be validated at route level
 
+    // Parameters for the SQL query
+    const parametros = [parseInt(producto_id, 10)];
     let whereClause = 'WHERE m.producto_id = ?';
-    const parametros = [producto_id];
 
     if (fecha_inicio) {
       whereClause += ' AND DATE(m.fecha) >= ?';
       parametros.push(fecha_inicio);
     }
-
     if (fecha_fin) {
       whereClause += ' AND DATE(m.fecha) <= ?';
       parametros.push(fecha_fin);
     }
-
     if (tipo_movimiento) {
       whereClause += ' AND m.tipo_movimiento = ?';
       parametros.push(tipo_movimiento);
     }
+    parametros.push(parseInt(limite, 10));
 
-    parametros.push(parseInt(limite));
-
+    // SQL query remains largely the same but executed via dbQuery or a new model method
     const sql = `
-      SELECT 
+      SELECT
         m.*,
         p.codigo as producto_codigo,
         p.descripcion as producto_descripcion,
         u.nombre_completo as usuario_nombre,
         i.lote,
-        CASE 
+        CASE
           WHEN m.tipo_movimiento = 'entrada' THEN 'Entrada'
           WHEN m.tipo_movimiento = 'salida' THEN 'Salida'
           WHEN m.tipo_movimiento = 'ajuste' THEN 'Ajuste'
@@ -150,12 +84,13 @@ const obtenerKardex = async (req, res, next) => {
       LIMIT ?
     `;
 
+    // This specific query might remain here or be moved to a static method in MovimientoInventario model
     const movimientos = await dbQuery(sql, parametros);
 
     res.json({
       success: true,
       data: {
-        producto_id,
+        producto_id: parseInt(producto_id, 10),
         movimientos,
         total: movimientos.length
       }
@@ -167,10 +102,13 @@ const obtenerKardex = async (req, res, next) => {
 
 // Obtener resumen de inventario
 const obtenerResumen = async (req, res, next) => {
+  // This function uses multiple specific SQL queries.
+  // These could be moved to static methods in Inventario or related models.
+  // For now, let's assume they might stay here or be refactored later if complex.
   try {
     // Total de productos
     const sqlTotalProductos = `
-      SELECT 
+      SELECT
         COUNT(DISTINCT producto_id) as total_productos,
         COUNT(*) as total_lotes,
         SUM(cantidad_actual) as total_unidades,
@@ -194,7 +132,7 @@ const obtenerResumen = async (req, res, next) => {
     const sqlStockBajo = `
       SELECT COUNT(DISTINCT p.id) as total
       FROM productos p
-      WHERE p.activo = true 
+      WHERE p.activo = true
         AND p.stock_minimo > 0
         AND (
           SELECT COALESCE(SUM(cantidad_actual), 0)
@@ -205,7 +143,7 @@ const obtenerResumen = async (req, res, next) => {
 
     // Distribución por proveedor
     const sqlPorProveedor = `
-      SELECT 
+      SELECT
         pr.nombre as proveedor,
         COUNT(DISTINCT i.producto_id) as productos,
         SUM(i.cantidad_actual) as unidades
@@ -240,78 +178,47 @@ const obtenerResumen = async (req, res, next) => {
 
 // Ajustar inventario
 const ajustarInventario = async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Errores de validación',
+      errors: errors.array()
+    });
+  }
+
+  const { inventario_id, cantidad_nueva, motivo, observaciones } = req.body;
+  const usuario_id = req.usuario.id;
+
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Errores de validación',
-        errors: errors.array()
-      });
-    }
-
-    const {
-      inventario_id,
-      cantidad_nueva,
-      motivo,
-      observaciones
-    } = req.body;
-
-    // Obtener inventario actual
-    const [inventarioActual] = await dbQuery(
-      'SELECT * FROM inventario WHERE id = ?',
-      [inventario_id]
-    );
-
+    const inventarioActual = await Inventario.obtenerDetalleLote(inventario_id);
     if (!inventarioActual) {
-      return res.status(404).json({
-        success: false,
-        message: 'Lote de inventario no encontrado'
-      });
+      return res.status(404).json({ success: false, message: 'Lote de inventario no encontrado' });
     }
 
-    const diferencia = cantidad_nueva - inventarioActual.cantidad_actual;
+    const dataAjuste = {
+      inventario_id: parseInt(inventario_id, 10),
+      cantidad_nueva: parseInt(cantidad_nueva, 10),
+      motivo,
+      observaciones,
+      usuario_id,
+      producto_id: inventarioActual.producto_id,
+      diferencia: parseInt(cantidad_nueva, 10) - inventarioActual.cantidad_actual,
+      saldo_anterior: inventarioActual.cantidad_actual
+    };
 
-    // Actualizar inventario
-    await dbQuery(
-      'UPDATE inventario SET cantidad_actual = ?, estado = ? WHERE id = ?',
-      [
-        cantidad_nueva,
-        cantidad_nueva === 0 ? 'agotado' : 'disponible',
-        inventario_id
-      ]
-    );
-
-    // Registrar movimiento
-    await dbQuery(
-      `INSERT INTO movimientos_inventario (
-        fecha, tipo_movimiento, documento_tipo, documento_numero,
-        producto_id, inventario_id, cantidad, saldo_anterior, 
-        saldo_actual, usuario_id, observaciones
-      ) VALUES (
-        NOW(), 'ajuste', ?, ?, ?, ?, ?, ?, ?, ?, ?
-      )`,
-      [
-        motivo,
-        `AJU-${Date.now()}`,
-        inventarioActual.producto_id,
-        inventario_id,
-        diferencia,
-        inventarioActual.cantidad_actual,
-        cantidad_nueva,
-        req.usuario.id,
-        observaciones
-      ]
-    );
+    await transaction(async (connection) => {
+      await Inventario.ajustarInventario(dataAjuste, connection);
+    });
 
     res.json({
       success: true,
       message: 'Inventario ajustado exitosamente',
       data: {
-        inventario_id,
-        cantidad_anterior: inventarioActual.cantidad_actual,
-        cantidad_nueva,
-        diferencia
+        inventario_id: dataAjuste.inventario_id,
+        cantidad_anterior: dataAjuste.saldo_anterior,
+        cantidad_nueva: dataAjuste.cantidad_nueva,
+        diferencia: dataAjuste.diferencia
       }
     });
   } catch (error) {
@@ -321,119 +228,54 @@ const ajustarInventario = async (req, res, next) => {
 
 // Transferir entre lotes
 const transferirLotes = async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Errores de validación',
+      errors: errors.array()
+    });
+  }
+
+  const { lote_origen_id, lote_destino_id, cantidad, observaciones } = req.body;
+  const usuario_id = req.usuario.id;
+
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Errores de validación',
-        errors: errors.array()
-      });
-    }
-
-    const {
-      lote_origen_id,
-      lote_destino_id,
-      cantidad,
-      observaciones
-    } = req.body;
-
-    // Verificar lotes
-    const [loteOrigen] = await dbQuery(
-      'SELECT * FROM inventario WHERE id = ?',
-      [lote_origen_id]
-    );
-
-    const [loteDestino] = await dbQuery(
-      'SELECT * FROM inventario WHERE id = ?',
-      [lote_destino_id]
-    );
+    const loteOrigen = await Inventario.obtenerDetalleLote(lote_origen_id);
+    const loteDestino = await Inventario.obtenerDetalleLote(lote_destino_id);
 
     if (!loteOrigen || !loteDestino) {
-      return res.status(404).json({
-        success: false,
-        message: 'Lote no encontrado'
-      });
+      return res.status(404).json({ success: false, message: 'Lote de origen o destino no encontrado' });
     }
-
     if (loteOrigen.producto_id !== loteDestino.producto_id) {
-      return res.status(400).json({
-        success: false,
-        message: 'Los lotes deben ser del mismo producto'
-      });
+      return res.status(400).json({ success: false, message: 'Los lotes deben ser del mismo producto' });
     }
-
     if (loteOrigen.cantidad_actual < cantidad) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cantidad insuficiente en el lote origen'
-      });
+      return res.status(400).json({ success: false, message: 'Cantidad insuficiente en el lote origen' });
     }
 
-    // Actualizar lotes
-    await dbQuery(
-      'UPDATE inventario SET cantidad_actual = cantidad_actual - ? WHERE id = ?',
-      [cantidad, lote_origen_id]
-    );
+    const dataTransferencia = {
+      lote_origen_id: parseInt(lote_origen_id, 10),
+      lote_destino_id: parseInt(lote_destino_id, 10),
+      cantidad_a_transferir: parseInt(cantidad, 10),
+      producto_id: loteOrigen.producto_id,
+      usuario_id,
+      observaciones,
+      lote_origen_cantidad_anterior: loteOrigen.cantidad_actual,
+      lote_destino_cantidad_anterior: loteDestino.cantidad_actual
+    };
 
-    await dbQuery(
-      'UPDATE inventario SET cantidad_actual = cantidad_actual + ? WHERE id = ?',
-      [cantidad, lote_destino_id]
-    );
-
-    // Registrar movimientos
-    const numeroTransferencia = `TRF-${Date.now()}`;
-
-    // Movimiento de salida
-    await dbQuery(
-      `INSERT INTO movimientos_inventario (
-        fecha, tipo_movimiento, documento_tipo, documento_numero,
-        producto_id, inventario_id, cantidad, saldo_anterior, 
-        saldo_actual, usuario_id, observaciones
-      ) VALUES (
-        NOW(), 'ajuste', 'transferencia', ?, ?, ?, ?, ?, ?, ?, ?
-      )`,
-      [
-        numeroTransferencia,
-        loteOrigen.producto_id,
-        lote_origen_id,
-        -cantidad,
-        loteOrigen.cantidad_actual,
-        loteOrigen.cantidad_actual - cantidad,
-        req.usuario.id,
-        `Transferencia a lote ${loteDestino.lote}. ${observaciones || ''}`
-      ]
-    );
-
-    // Movimiento de entrada
-    await dbQuery(
-      `INSERT INTO movimientos_inventario (
-        fecha, tipo_movimiento, documento_tipo, documento_numero,
-        producto_id, inventario_id, cantidad, saldo_anterior, 
-        saldo_actual, usuario_id, observaciones
-      ) VALUES (
-        NOW(), 'ajuste', 'transferencia', ?, ?, ?, ?, ?, ?, ?, ?
-      )`,
-      [
-        numeroTransferencia,
-        loteDestino.producto_id,
-        lote_destino_id,
-        cantidad,
-        loteDestino.cantidad_actual,
-        loteDestino.cantidad_actual + cantidad,
-        req.usuario.id,
-        `Transferencia desde lote ${loteOrigen.lote}. ${observaciones || ''}`
-      ]
-    );
+    await transaction(async (connection) => {
+      await Inventario.transferirLotes(dataTransferencia, connection);
+    });
 
     res.json({
       success: true,
       message: 'Transferencia realizada exitosamente',
       data: {
-        numero_transferencia: numeroTransferencia,
-        lote_origen: loteOrigen.lote,
-        lote_destino: loteDestino.lote,
-        cantidad
+        lote_origen_id: dataTransferencia.lote_origen_id,
+        lote_destino_id: dataTransferencia.lote_destino_id,
+        cantidad_transferida: dataTransferencia.cantidad_a_transferir
       }
     });
   } catch (error) {
@@ -441,13 +283,19 @@ const transferirLotes = async (req, res, next) => {
   }
 };
 
+
 // Exportar inventario
 const exportarInventario = async (req, res, next) => {
+  // This can also use Inventario.obtenerInventarioGeneral if the export needs the same complex filtering/sorting
+  // Or it can remain a specific query if export requirements are different.
+  // For now, keeping its specific query.
   try {
-    const { formato = 'json' } = req.query;
+    const { formato = 'json' } = req.query; // Validate 'formato' at route level
 
+    // This specific query might be complex enough to warrant its own model method
+    // e.g., Inventario.exportarInventarioCompleto(opciones)
     const sql = `
-      SELECT 
+      SELECT
         p.codigo,
         p.referencia,
         p.descripcion,
@@ -471,7 +319,7 @@ const exportarInventario = async (req, res, next) => {
       ORDER BY p.codigo, i.fecha_vencimiento
     `;
 
-    const inventario = await dbQuery(sql);
+    const inventario = await dbQuery(sql); // Using dbQuery directly for now
 
     if (formato === 'csv') {
       const csv = convertirACSV(inventario);
@@ -492,22 +340,23 @@ const exportarInventario = async (req, res, next) => {
 // Función auxiliar para convertir a CSV
 function convertirACSV(data) {
   if (data.length === 0) return '';
-  
+
   const headers = Object.keys(data[0]);
   const csvHeaders = headers.join(',');
-  
+
   const csvRows = data.map(row => {
     return headers.map(header => {
       const value = row[header];
-      return value !== null ? `"${value}"` : '""';
+      return value !== null && value !== undefined ? `"${String(value).replace(/"/g, '""')}"` : '""';
     }).join(',');
   });
-  
+
   return [csvHeaders, ...csvRows].join('\n');
 }
 
 module.exports = {
   obtenerInventario,
+  obtenerLotePorId,
   obtenerKardex,
   obtenerResumen,
   ajustarInventario,

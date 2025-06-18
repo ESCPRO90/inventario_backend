@@ -10,33 +10,34 @@ router.use(verificarToken);
 
 // Listar proveedores
 router.get('/', [
-  query('pagina').optional().isInt({ min: 1 }).withMessage('Página debe ser un número positivo'),
-  query('limite').optional().isInt({ min: 1, max: 100 }).withMessage('Límite debe estar entre 1 y 100'),
+  query('pagina').optional().isInt({ min: 1 }).withMessage('Página debe ser un número positivo').toInt(),
+  query('limite').optional().isInt({ min: 1, max: 100 }).withMessage('Límite debe estar entre 1 y 100').toInt(),
+  query('buscar').optional().isString().trim().escape().withMessage('Búsqueda inválida'),
   query('orden').optional().isIn(['codigo', 'nombre', 'created_at']).withMessage('Orden inválido'),
-  query('direccion').optional().isIn(['ASC', 'DESC', 'asc', 'desc']).withMessage('Dirección inválida')
+  query('direccion').optional().isIn(['ASC', 'DESC', 'asc', 'desc']).toUpperCase().withMessage('Dirección inválida')
 ], proveedoresController.listarProveedores);
 
 // Buscar proveedores (autocomplete)
 router.get('/buscar', [
-  query('q').notEmpty().withMessage('Término de búsqueda requerido'),
-  query('limite').optional().isInt({ min: 1, max: 50 }).withMessage('Límite debe estar entre 1 y 50')
+  query('q').notEmpty().withMessage('Término de búsqueda requerido').trim().escape(),
+  query('limite').optional().isInt({ min: 1, max: 50 }).withMessage('Límite debe estar entre 1 y 50').toInt()
 ], proveedoresController.buscarProveedores);
 
 // Obtener proveedor por ID
 router.get('/:id', [
-  param('id').isInt().withMessage('ID inválido'),
-  query('incluir_productos').optional().isBoolean().withMessage('incluir_productos debe ser booleano'),
-  query('incluir_estadisticas').optional().isBoolean().withMessage('incluir_estadisticas debe ser booleano')
+  param('id').isInt({ min: 1 }).withMessage('ID de proveedor inválido').toInt(),
+  query('incluir_productos').optional().isBoolean().withMessage('incluir_productos debe ser booleano').toBoolean(),
+  query('incluir_estadisticas').optional().isBoolean().withMessage('incluir_estadisticas debe ser booleano').toBoolean()
 ], proveedoresController.obtenerProveedor);
 
 // Obtener productos del proveedor
 router.get('/:id/productos', [
-  param('id').isInt().withMessage('ID inválido')
+  param('id').isInt({ min: 1 }).withMessage('ID de proveedor inválido').toInt()
 ], proveedoresController.productosDelProveedor);
 
 // Obtener estadísticas del proveedor
 router.get('/:id/estadisticas', [
-  param('id').isInt().withMessage('ID inválido')
+  param('id').isInt({ min: 1 }).withMessage('ID de proveedor inválido').toInt()
 ], proveedoresController.estadisticasProveedor);
 
 // Crear proveedor (solo admin o bodeguero)

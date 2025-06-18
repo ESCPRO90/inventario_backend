@@ -3,6 +3,7 @@ const Salida = require('../models/Salida');
 const Maleta = require('../models/Maleta');
 const Cliente = require('../models/Cliente');
 const Producto = require('../models/Producto');
+const { BusinessLogicError, NotFoundError, ValidationError } = require('../utils/customErrors');
 
 // Listar salidas
 const listarSalidas = async (req, res, next) => {
@@ -78,13 +79,9 @@ const obtenerSalida = async (req, res, next) => {
 const crearSalida = async (req, res, next) => {
   try {
     // Validar errores de entrada
-    const errores = validationResult(req);
-    if (!errores.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Datos inválidos',
-        errores: errores.array()
-      });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return next(errors); // Pass to errorHandler
     }
 
     const {
@@ -97,43 +94,56 @@ const crearSalida = async (req, res, next) => {
 
     // Validar que el cliente existe (si se proporciona)
     if (cliente_id) {
-      const cliente = await Cliente.buscarPorId(cliente_id);
-      if (!cliente) {
-        return res.status(400).json({
-          success: false,
-          message: 'Cliente no encontrado'
-        });
+      const cliente = await Cliente.buscarPorId(cliente_id); // Assumes buscarPorId throws NotFoundError
+      if (!cliente) { // Defensive check, though model should throw
+        throw new NotFoundError(`Cliente con ID ${cliente_id} no encontrado.`);
       }
     }
 
     // Validar que la maleta existe (si se proporciona)
     if (maleta_id) {
-      const maleta = await Maleta.buscarPorId(maleta_id);
-      if (!maleta) {
-        return res.status(400).json({
-          success: false,
-          message: 'Maleta no encontrada'
+      const maleta = await Maleta.buscarPorId(maleta_id); // Assumes buscarPorId throws NotFoundError
+      if (!maleta) { // Defensive check
+        throw new NotFoundError(`Maleta con ID ${maleta_id} no encontrada.`);
+      }
+    }
+
+    if (!detalles || detalles.length === 0) {
+        throw new BusinessLogicError('La salida debe tener al menos un producto en los detalles.');
+    }
+
+    // Batch fetch product details (including stock)
+    const productoIds = [...new Set(detalles.map(d => d.producto_id))];
+    if (productoIds.length === 0 && tipo_salida !== 'donacion') { // Donacion might not need products initially
+        throw new BusinessLogicError('No se especificaron productos en los detalles.');
+    }
+
+    const productosData = await Producto.buscarMuchosPorIds(productoIds); // Includes stock_actual
+    const productosMap = new Map(productosData.map(p => [p.id, p]));
+
+    const validationErrors = [];
+    for (const detalle of detalles) {
+      const producto = productosMap.get(detalle.producto_id);
+      if (!producto) {
+        validationErrors.push({
+          producto_id: detalle.producto_id,
+          message: `Producto con ID ${detalle.producto_id} no encontrado.`
+        });
+        continue;
+      }
+
+      // Validar stock disponible (stock_actual comes from buscarMuchosPorIds)
+      if (producto.stock_actual < detalle.cantidad) {
+        validationErrors.push({
+          producto_id: detalle.producto_id,
+          codigo_producto: producto.codigo,
+          message: `Stock insuficiente para el producto ${producto.codigo}. Stock disponible: ${producto.stock_actual}, Solicitado: ${detalle.cantidad}.`
         });
       }
     }
 
-    // Validar productos en los detalles
-    for (const detalle of detalles) {
-      const producto = await Producto.buscarPorId(detalle.producto_id);
-      if (!producto) {
-        return res.status(400).json({
-          success: false,
-          message: `Producto con ID ${detalle.producto_id} no encontrado`
-        });
-      }
-
-      // Validar stock disponible
-      if (producto.stock < detalle.cantidad) {
-        return res.status(400).json({
-          success: false,
-          message: `Stock insuficiente para el producto ${producto.nombre}. Stock disponible: ${producto.stock}`
-        });
-      }
+    if (validationErrors.length > 0) {
+      throw new ValidationError('Errores de validación en los detalles de la salida.', validationErrors);
     }
 
     const datosSalida = {
@@ -141,10 +151,14 @@ const crearSalida = async (req, res, next) => {
       cliente_id,
       maleta_id,
       observaciones,
-      estado: 'pendiente',
+      estado: 'procesada', // Typically, a salida is 'procesada' upon creation if stock is confirmed
       fecha: new Date(),
-      usuario_id: req.user?.id || null
+      usuario_id: req.usuario ? req.usuario.id : null // Ensure req.usuario exists
     };
+
+    if (!datosSalida.usuario_id) {
+      throw new AuthenticationError('No se pudo determinar el usuario para registrar la salida.');
+    }
 
     const nuevaSalida = await Salida.crear(datosSalida, detalles);
 

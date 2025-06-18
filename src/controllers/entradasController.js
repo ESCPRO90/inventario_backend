@@ -2,6 +2,7 @@ const { validationResult } = require('express-validator');
 const Entrada = require('../models/Entrada');
 const Producto = require('../models/Producto');
 const Proveedor = require('../models/Proveedor');
+const { BusinessLogicError, ValidationError } = require('../utils/customErrors');
 
 // Listar entradas
 const listarEntradas = async (req, res, next) => {
@@ -72,57 +73,62 @@ const crearEntrada = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Errores de validación',
-        errors: errors.array()
-      });
+      return next(errors); // Pass to errorHandler
     }
 
     const { proveedor_id, tipo_documento, numero_documento, fecha, observaciones, detalles } = req.body;
 
     // Validaciones adicionales
     if (!detalles || detalles.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'La entrada debe tener al menos un producto'
-      });
+      throw new BusinessLogicError('La entrada debe tener al menos un producto');
     }
 
     // Verificar que el proveedor existe
     const proveedor = await Proveedor.buscarPorId(proveedor_id);
     if (!proveedor) {
-      return res.status(400).json({
-        success: false,
-        message: 'Proveedor no encontrado'
-      });
+      throw new BusinessLogicError(`Proveedor con ID ${proveedor_id} no encontrado.`);
     }
 
-    // Verificar que todos los productos existen
+    // Batch fetch product details
+    const productoIds = [...new Set(detalles.map(d => d.producto_id))];
+    if (productoIds.length === 0) {
+        throw new BusinessLogicError('No se especificaron productos en los detalles.');
+    }
+    const productosExistentes = await Producto.buscarMuchosPorIds(productoIds);
+    const productosMap = new Map(productosExistentes.map(p => [p.id, p]));
+
+    const validationErrors = [];
     for (const detalle of detalles) {
-      const producto = await Producto.buscarPorId(detalle.producto_id);
+      const producto = productosMap.get(detalle.producto_id);
       if (!producto) {
-        return res.status(400).json({
-          success: false,
-          message: `Producto con ID ${detalle.producto_id} no encontrado`
+        validationErrors.push({
+          producto_id: detalle.producto_id,
+          message: `Producto con ID ${detalle.producto_id} no encontrado.`
         });
+        continue; // Skip further checks for this detail
       }
 
       // Verificar lote si el producto lo requiere
-      if (producto.requiere_lote && !detalle.lote) {
-        return res.status(400).json({
-          success: false,
-          message: `El producto ${producto.codigo} requiere número de lote`
+      if (producto.requiere_lote && (!detalle.lote || detalle.lote.trim() === '')) {
+        validationErrors.push({
+          producto_id: detalle.producto_id,
+          codigo_producto: producto.codigo,
+          message: `El producto ${producto.codigo} requiere número de lote.`
         });
       }
 
       // Verificar vencimiento si el producto lo requiere
       if (producto.requiere_vencimiento && !detalle.fecha_vencimiento) {
-        return res.status(400).json({
-          success: false,
-          message: `El producto ${producto.codigo} requiere fecha de vencimiento`
+        validationErrors.push({
+          producto_id: detalle.producto_id,
+          codigo_producto: producto.codigo,
+          message: `El producto ${producto.codigo} requiere fecha de vencimiento.`
         });
       }
+    }
+
+    if (validationErrors.length > 0) {
+      throw new ValidationError('Errores de validación en los detalles de la entrada.', validationErrors);
     }
 
     // Crear entrada
