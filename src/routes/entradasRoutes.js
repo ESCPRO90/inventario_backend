@@ -43,26 +43,27 @@ const validarDetalles = [
 
 // Listar entradas
 router.get('/', [
-  query('pagina').optional().isInt({ min: 1 }).withMessage('Página debe ser un número positivo'),
-  query('limite').optional().isInt({ min: 1, max: 100 }).withMessage('Límite debe estar entre 1 y 100'),
-  query('proveedor_id').optional().isInt().withMessage('ID de proveedor inválido'),
-  query('fecha_inicio').optional().isISO8601().withMessage('Fecha inicio inválida'),
-  query('fecha_fin').optional().isISO8601().withMessage('Fecha fin inválida'),
+  query('pagina').optional().isInt({ min: 1 }).withMessage('Página debe ser un número positivo').toInt(),
+  query('limite').optional().isInt({ min: 1, max: 100 }).withMessage('Límite debe estar entre 1 y 100').toInt(),
+  query('buscar').optional().isString().trim().escape().withMessage('Búsqueda inválida'),
+  query('proveedor_id').optional().isInt({ min: 1 }).withMessage('ID de proveedor inválido').toInt(),
+  query('fecha_inicio').optional().isISO8601().withMessage('Fecha inicio inválida').toDate(),
+  query('fecha_fin').optional().isISO8601().withMessage('Fecha fin inválida').toDate(),
   query('estado').optional().isIn(['pendiente', 'procesada', 'anulada']).withMessage('Estado inválido'),
-  query('orden').optional().isIn(['fecha', 'numero_entrada', 'total']).withMessage('Orden inválido'),
-  query('direccion').optional().isIn(['ASC', 'DESC', 'asc', 'desc']).withMessage('Dirección inválida')
+  query('orden').optional().isAlpha('es-ES', {ignore: '._'}).escape().withMessage('Orden inválido'), // Allow alphanumeric, underscore, dot
+  query('direccion').optional().isIn(['ASC', 'DESC', 'asc', 'desc']).toUpperCase().withMessage('Dirección inválida')
 ], entradasController.listarEntradas);
 
 // Estadísticas
 router.get('/estadisticas', [
-  query('fecha_inicio').optional().isISO8601().withMessage('Fecha inicio inválida'),
-  query('fecha_fin').optional().isISO8601().withMessage('Fecha fin inválida'),
-  query('proveedor_id').optional().isInt().withMessage('ID de proveedor inválido')
+  query('fecha_inicio').optional().isISO8601().withMessage('Fecha inicio inválida').toDate(),
+  query('fecha_fin').optional().isISO8601().withMessage('Fecha fin inválida').toDate(),
+  query('proveedor_id').optional().isInt({ min: 1 }).withMessage('ID de proveedor inválido').toInt()
 ], entradasController.obtenerEstadisticas);
 
 // Entradas recientes
 router.get('/recientes', [
-  query('limite').optional().isInt({ min: 1, max: 50 }).withMessage('Límite debe estar entre 1 y 50')
+  query('limite').optional().isInt({ min: 1, max: 50 }).withMessage('Límite debe estar entre 1 y 50').toInt()
 ], entradasController.entradasRecientes);
 
 // Generar número de entrada

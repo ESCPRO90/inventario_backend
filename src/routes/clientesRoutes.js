@@ -10,12 +10,13 @@ router.use(verificarToken);
 
 // Listar clientes
 router.get('/', [
-  query('pagina').optional().isInt({ min: 1 }).withMessage('Página debe ser un número positivo'),
-  query('limite').optional().isInt({ min: 1, max: 100 }).withMessage('Límite debe estar entre 1 y 100'),
+  query('pagina').optional().isInt({ min: 1 }).withMessage('Página debe ser un número positivo').toInt(),
+  query('limite').optional().isInt({ min: 1, max: 100 }).withMessage('Límite debe estar entre 1 y 100').toInt(),
+  query('buscar').optional().isString().trim().escape().withMessage('Búsqueda inválida'),
   query('tipo').optional().isIn(['hospital', 'clinica', 'medico', 'otro']).withMessage('Tipo inválido'),
-  query('credito_activo').optional().isBoolean().withMessage('credito_activo debe ser booleano'),
+  query('credito_activo').optional().isBoolean().withMessage('credito_activo debe ser booleano').toBoolean(),
   query('orden').optional().isIn(['codigo', 'nombre', 'tipo', 'created_at']).withMessage('Orden inválido'),
-  query('direccion').optional().isIn(['ASC', 'DESC', 'asc', 'desc']).withMessage('Dirección inválida')
+  query('direccion').optional().isIn(['ASC', 'DESC', 'asc', 'desc']).toUpperCase().withMessage('Dirección inválida')
 ], clientesController.listarClientes);
 
 // Buscar clientes (autocomplete)

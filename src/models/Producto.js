@@ -289,6 +289,49 @@ class Producto {
     const buscarPattern = `%${termino}%`;
     return await query(sql, [buscarPattern, buscarPattern, buscarPattern, limite]);
   }
+
+  /**
+   * Busca múltiples productos por sus IDs.
+   * Incluye información de stock actual.
+   * @param {number[]} ids - Array de IDs de productos.
+   * @returns {Promise<object[]>} - Array de objetos de producto.
+   */
+  static async buscarMuchosPorIds(ids) {
+    if (!ids || ids.length === 0) {
+      return [];
+    }
+    const placeholders = ids.map(() => '?').join(',');
+    const sql = `
+      SELECT p.*, c.nombre as categoria_nombre,
+        COALESCE(SUM(i.cantidad_actual), 0) as stock_actual
+      FROM productos p
+      LEFT JOIN categorias c ON p.categoria_id = c.id
+      LEFT JOIN inventario i ON p.id = i.producto_id AND i.estado = 'disponible'
+      WHERE p.id IN (${placeholders}) AND p.activo = true
+      GROUP BY p.id
+    `;
+    return await query(sql, ids);
+  }
+
+  /**
+   * Obtiene el stock actual para múltiples productos.
+   * @param {number[]} ids - Array de IDs de productos.
+   * @returns {Promise<object[]>} - Array de objetos { producto_id, stock_total }
+   */
+  static async obtenerStockActualPorIds(ids) {
+    if (!ids || ids.length === 0) {
+      return [];
+    }
+    const placeholders = ids.map(() => '?').join(',');
+    const sql = `
+      SELECT p.id as producto_id, COALESCE(SUM(i.cantidad_actual), 0) as stock_total
+      FROM productos p
+      LEFT JOIN inventario i ON p.id = i.producto_id AND i.estado = 'disponible'
+      WHERE p.id IN (${placeholders}) AND p.activo = true
+      GROUP BY p.id
+    `;
+    return await query(sql, ids);
+  }
 }
 
 module.exports = Producto;
